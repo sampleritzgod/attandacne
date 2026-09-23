@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Track attendance per subject and find out how many classes you can skip or need to attend." />
+  <title>Attendance Calculator</title>
+  <link rel="stylesheet" href="style.css" />
+  <script>
+    // Apply the saved theme before first paint to avoid a flash of the wrong colours.
+    try {
+      const saved = JSON.parse(localStorage.getItem("attendance-app-v2"));
+      const theme = saved && saved.settings && saved.settings.theme;
+      if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+    } catch {}
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+          <rect x="3" y="5" width="26" height="24" rx="5" />
+          <path d="M3 12h26M10 3v5M22 3v5" />
+          <path class="tick" d="M11 20l3.5 3.5L21 17" />
+        </svg>
+        <div>
+          <h1>Attendance Calculator</h1>
+          <p class="tagline">Know where you stand before you skip.</p>
+        </div>
+      </div>
+      <button id="theme-btn" class="btn btn-ghost" type="button" aria-label="Change colour theme">
+        <span id="theme-icon" aria-hidden="true">◐</span>
+        <span id="theme-label">System</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="container">
+    <p class="print-only report-date" id="report-date"></p>
+
+    <!-- Overview -->
+    <section class="card overview" id="overview" aria-labelledby="overview-title">
+      <h2 id="overview-title" class="sr-only">Overview</h2>
+      <div class="ring-wrap large" id="overall-ring"></div>
+      <div class="overview-body">
+        <p class="eyebrow">Overall attendance</p>
+        <p class="overview-headline" id="overall-headline">Add subjects to see your overall attendance.</p>
+        <dl class="stats">
+          <div><dt>Classes attended</dt><dd id="stat-classes">0 / 0</dd></div>
+          <div><dt>Subjects</dt><dd id="stat-subjects">0</dd></div>
+          <div class="stat-good"><dt>Safe</dt><dd id="stat-safe">0</dd></div>
+          <div class="stat-warn"><dt>On the edge</dt><dd id="stat-edge">0</dd></div>
+          <div class="stat-bad"><dt>Below target</dt><dd id="stat-below">0</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <div class="two-col no-print">
+      <!-- Quick check -->
+      <section class="card" aria-labelledby="quick-title">
+        <div class="card-head">
+          <h2 id="quick-title">Quick check</h2>
+          <p class="hint">A one-off calculation. Nothing is saved.</p>
+        </div>
+        <form id="calc-form" class="field-row" novalidate>
+          <label>Attended
+            <input type="number" id="attended" min="0" step="1" inputmode="numeric" placeholder="42" />
+          </label>
+          <label>Total held
+            <input type="number" id="total" min="1" step="1" inputmode="numeric" placeholder="50" />
+          </label>
+          <label>Target %
+            <input type="number" id="target" min="1" max="100" step="1" inputmode="numeric" />
+          </label>
+        </form>
+        <div id="calc-result" class="result" aria-live="polite"></div>
+      </section>
+
+      <!-- What-if planner -->
+      <section class="card" aria-labelledby="whatif-title">
+        <div class="card-head">
+          <h2 id="whatif-title">What-if planner</h2>
+          <p class="hint">See where you'll be after the next few classes.</p>
+        </div>
+        <form id="whatif-form" class="field-row" novalidate>
+          <label class="span-all">Based on
+            <select id="whatif-source"></select>
+          </label>
+          <label>Attend next
+            <input type="number" id="whatif-attend" min="0" step="1" inputmode="numeric" placeholder="0" />
+          </label>
+          <label>Miss next
+            <input type="number" id="whatif-miss" min="0" step="1" inputmode="numeric" placeholder="0" />
+          </label>
+        </form>
+        <div id="whatif-result" class="result" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <!-- Subjects -->
+    <section class="card" id="subjects-section" aria-labelledby="subjects-title">
+      <div class="card-head with-tools">
+        <div>
+          <h2 id="subjects-title">Subjects</h2>
+          <p class="hint no-print">Mark each class as you go. Everything is saved in this browser.</p>
+        </div>
+        <div class="tools no-print">
+          <input type="search" id="search" placeholder="Search subjects" aria-label="Search subjects" />
+          <select id="sort" aria-label="Sort subjects">
+            <option value="added">Order added</option>
+            <option value="name">Name A–Z</option>
+            <option value="pct-asc">Lowest % first</option>
+            <option value="pct-desc">Highest % first</option>
+          </select>
+        </div>
+      </div>
+
+      <form id="subject-form" class="add-form no-print" novalidate>
+        <label class="grow">Subject name
+          <input type="text" id="subject-name" maxlength="40" placeholder="e.g. Mathematics" required />
+        </label>
+        <label>Attended
+          <input type="number" id="subject-attended" min="0" step="1" inputmode="numeric" placeholder="0" />
+        </label>
+        <label>Total
+          <input type="number" id="subject-total" min="0" step="1" inputmode="numeric" placeholder="0" />
+        </label>
+        <label>Target %
+          <input type="number" id="subject-target" min="1" max="100" step="1" inputmode="numeric" placeholder="Default" />
+        </label>
+        <button type="submit" class="btn btn-primary">+ Add subject</button>
+      </form>
+      <p id="subject-error" class="form-error" role="alert"></p>
+
+      <div id="subject-list" class="subject-grid"></div>
+      <div id="empty-state" class="empty">
+        <p class="empty-title">No subjects yet</p>
+        <p class="hint">Add your first subject above. You can enter the counts you already have.</p>
+      </div>
+      <p id="no-match" class="hint" hidden>No subjects match your search.</p>
+    </section>
+
+    <!-- Settings & data -->
+    <section class="card no-print" aria-labelledby="data-title">
+      <div class="card-head">
+        <h2 id="data-title">Settings &amp; data</h2>
+        <p class="hint">Your data never leaves this device unless you export it.</p>
+      </div>
+      <div class="settings-row">
+        <label class="inline-label">Default target %
+          <input type="number" id="default-target" min="1" max="100" step="1" inputmode="numeric" />
+        </label>
+      </div>
+      <div class="button-row">
+        <button type="button" class="btn" id="export-json">Export backup (.json)</button>
+        <button type="button" class="btn" id="import-json">Import backup</button>
+        <button type="button" class="btn" id="export-csv">Export spreadsheet (.csv)</button>
+        <button type="button" class="btn" id="print-report">Print / save report</button>
+        <button type="button" class="btn btn-danger" id="reset-all">Reset everything</button>
+      </div>
+      <input type="file" id="import-file" accept=".json,application/json" hidden />
+    </section>
+
+    <footer class="footer no-print">Runs entirely in your browser. No account and no internet connection needed.</footer>
+  </main>
+
+  <!-- Edit subject dialog -->
+  <dialog id="edit-dialog" aria-labelledby="edit-title">
+    <form id="edit-form" novalidate>
+      <h2 id="edit-title">Edit subject</h2>
+      <label>Subject name
+        <input type="text" id="edit-name" maxlength="40" required />
+      </label>
+      <div class="field-row">
+        <label>Attended
+          <input type="number" id="edit-attended" min="0" step="1" inputmode="numeric" />
+        </label>
+        <label>Total
+          <input type="number" id="edit-total" min="0" step="1" inputmode="numeric" />
+        </label>
+        <label>Target %
+          <input type="number" id="edit-target" min="1" max="100" step="1" inputmode="numeric" placeholder="Default" />
+        </label>
+      </div>
+      <p id="edit-error" class="form-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button type="button" class="btn" id="edit-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save changes</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden>
+    <span id="toast-msg"></span>
+    <button type="button" id="toast-action" class="toast-action" hidden></button>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
